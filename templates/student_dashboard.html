@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <h1>Student Dashboard</h1>
+
+    <!-- Form to upload files -->
+    <form action="/upload" method="POST" enctype="multipart/form-data">
+        Upload File: <input type="file" name="file" required><br>
+        <button type="submit">Upload File</button>
+    </form>
+
+    <!-- Request Screen Share Form -->
+    <form action="{{ url_for('request_screen_share') }}" method="POST">
+        <button type="submit">Request Screen Sharing</button>
+    </form>
+
+    <!-- JS for WebRTC and receiving the approval -->
+    <script src="https://cdn.socket.io/4.5.1/socket.io.min.js"></script>
+    <script>
+        const socket = io();  // Establish socket connection
+
+        // Listen for the approval of screen sharing
+        socket.on('screen_share_approved', (data) => {
+            const currentUserId = {{ current_user.id }};  // Inject current student's ID into the template
+            if (data.student_id === currentUserId) {
+                alert("Your screen-sharing request has been approved!");
+                // Redirect to the screen share start page or trigger WebRTC for screen share
+                window.location.href = "/screen_share";  // You can change this URL to wherever your screen sharing page is
+            }
+        });
+
+        // Listen for the screen share denial
+        socket.on('screen_share_denied', (data) => {
+            const currentUserId = {{ current_user.id }};
+            if (data.student_id === currentUserId) {
+                alert("Your screen-sharing request has been denied.");
+            }
+        });
+
+        // If needed, you can handle the end of the screen-sharing session here
+        socket.on('screen_share_ended', (data) => {
+            const currentUserId = {{ current_user.id }};
+            if (data.student_id === currentUserId) {
+                alert("The screen-sharing session has ended.");
+                // Optionally redirect the user or disable certain features
+                window.location.href = "/";  // Redirect back to the home page, for example
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Screen Share</title>
+</head>
+<body>
+    <h1>Screen Share</h1>
+    <video id="localVideo" autoplay playsinline style="width: 100%; height: auto;"></video> <!-- Show local screen -->
+    <button id="startScreenShare">Start Screen Share</button>
+
+    <script src="https://cdn.socket.io/4.5.1/socket.io.min.js"></script>
+    <script>
+        const socket = io(); // Connect to the server
+        let peerConnection;
+        const config = {
+            iceServers: [{ urls: "stun:stun.l.google.com:19302" }] // Using Google's STUN server
+        };
+
+        let pendingCandidates = []; // Store incoming ICE candidates until remote description is set
+
+        // Debugging for signaling state changes
+        function logSignalingState() {
+            console.log("PeerConnection signaling state:", peerConnection.signalingState);
+        }
+
+        // Listen for 'answer' from the viewer
+        socket.on('answer', async (answer) => {
+            try {
+                if (!peerConnection) {
+                    console.error("Peer connection not initialized.");
+                    return;
+                }
+
+                // Set the remote description (answer)
+                if (peerConnection.signalingState === 'have-local-offer') {
+                    console.log("Setting remote description with received answer.");
+                    await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+                } else {
+                    console.warn("Unexpected signaling state:", peerConnection.signalingState);
+                }
+            } catch (error) {
+                console.error("Error setting remote description:", error);
+            }
+        });
+
+        // Handle incoming ICE candidates from the viewer
+        socket.on('candidate', async (candidate) => {
+            console.log("Received ICE candidate:", candidate);
+            if (peerConnection?.remoteDescription?.type) {
+                try {
+                    await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                    console.log("ICE candidate added successfully.");
+                } catch (error) {
+                    console.error("Error adding ICE candidate:", error);
+                }
+            } else {
+                console.log("Storing ICE candidate as remote description is not set.");
+                pendingCandidates.push(candidate);
+            }
+        });
+
+        document.getElementById('startScreenShare').onclick = async () => {
+            try {
+                if (!navigator.mediaDevices.getDisplayMedia) {
+                    alert("Screen sharing is not supported in this browser.");
+                    return;
+                }
+
+                console.log("Starting screen sharing...");
+
+                // Capture screen using getDisplayMedia
+                const localStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+                document.getElementById('localVideo').srcObject = localStream;
+
+                // Create a new RTCPeerConnection and add the stream's tracks
+                peerConnection = new RTCPeerConnection(config);
+                peerConnection.addEventListener('signalingstatechange', logSignalingState);
+
+                localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+                // Handle ICE candidates
+                peerConnection.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        console.log("Sending ICE candidate:", event.candidate);
+                        socket.emit('candidate', event.candidate);
+                    }
+                };
+
+                // Create and send offer to viewer
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+                console.log("Sending offer:", offer);
+                socket.emit('offer', offer);
+
+		socket.emit('start_screen_share', { action: 'start' });
+
+
+                // Add pending ICE candidates once the peer connection is ready
+                peerConnection.onconnectionstatechange = () => {
+                    if (peerConnection.connectionState === 'connected') {
+                        console.log("Peer connection established. Adding pending candidates.");
+                        pendingCandidates.forEach(async candidate => {
+                            try {
+                                await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                                console.log("Pending ICE candidate added:", candidate);
+                            } catch (error) {
+                                console.error("Error adding pending candidate:", error);
+                            }
+                        });
+                        pendingCandidates = []; // Clear the pending candidates queue
+                    }
+                };
+
+            } catch (error) {
+                console.error("Error starting screen sharing:", error);
+            }
+        };
+
+        // Debugging connection states
+        socket.on('connect', () => {
+            console.log("Connected to signaling server.");
+        });
+
+        socket.on('disconnect', () => {
+            console.warn("Disconnected from signaling server.");
+        });
+    </script>
+</body>
+</html>

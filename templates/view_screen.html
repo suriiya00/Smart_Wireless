@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>View Screen</title>
+</head>
+<body>
+    <h1>View Screen</h1>
+    <video id="remoteVideo" autoplay playsinline style="width: 100%; height: auto;"></video> <!-- Show remote screen -->
+
+    <script src="https://cdn.socket.io/4.5.1/socket.io.min.js"></script>
+    <script>
+        const socket = io(); // Connect to the signaling server
+        let peerConnection;
+        let pendingCandidates = []; // Hold ICE candidates until peer connection is ready
+
+        const config = {
+            iceServers: [{ urls: "stun:stun.l.google.com:19302" }] // Use Google's public STUN server
+        };
+
+        // Listen for 'offer' from the screen sender
+        socket.on('offer', async (offer) => {
+            console.log("Received offer:", offer);
+
+            // Create a new RTCPeerConnection
+            peerConnection = new RTCPeerConnection(config);
+
+            // Handle ICE candidates
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    console.log("Sending ICE candidate:", event.candidate);
+                    socket.emit('candidate', event.candidate); // Send candidate to the sender
+                }
+            };
+
+            // Display the incoming stream
+            peerConnection.ontrack = (event) => {
+                console.log("Received remote stream:", event.streams[0]);
+                const remoteVideo = document.getElementById('remoteVideo');
+                remoteVideo.srcObject = event.streams[0];
+		console.log("Remote video element updated with stream:", remoteVideo.srcObject);
+            };
+
+            // Set the remote description (offer)
+            try {
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+                console.log("Remote description set successfully.");
+
+                // Create and send answer
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+                console.log("Answer created and sent:", answer);
+                socket.emit('answer', answer);
+            } catch (error) {
+                console.error("Error handling offer:", error);
+            }
+
+            // Add any pending ICE candidates
+            pendingCandidates.forEach(async (candidate) => {
+                try {
+                    await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                    console.log("Added pending ICE candidate:", candidate);
+                } catch (error) {
+                    console.error("Error adding pending candidate:", error);
+                }
+            });
+            pendingCandidates = []; // Clear the pending candidates queue
+        });
+
+        // Handle incoming ICE candidates from the sender
+        socket.on('candidate', async (candidate) => {
+            console.log("Received ICE candidate:", candidate);
+            if (peerConnection?.remoteDescription?.type) {
+                try {
+                    await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                    console.log("ICE candidate added successfully.");
+                } catch (error) {
+                    console.error("Error adding ICE candidate:", error);
+                }
+            } else {
+                console.warn("PeerConnection not ready, storing candidate.");
+                pendingCandidates.push(candidate); // Store candidate if peer connection isn't ready
+            }
+        });
+
+        // Debugging connection states
+        socket.on('connect', () => {
+            console.log("Connected to signaling server.");
+        });
+
+        socket.on('disconnect', () => {
+            console.warn("Disconnected from signaling server.");
+        });
+    </script>
+</body>
+</html>

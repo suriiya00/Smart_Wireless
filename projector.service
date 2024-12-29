@@ -1,0 +1,14 @@
+[Unit]
+Description=Flask Web App for Presentations
+After=network.target
+
+[Service]
+User=pi
+WorkingDirectory=/home/pi/project
+Environment="PATH=/home/pi/project/env/bin"
+ExecStart=/home/pi/project/env/bin/python app.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+

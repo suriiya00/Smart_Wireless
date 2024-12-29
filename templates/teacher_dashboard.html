@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teacher Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <h1>Teacher Dashboard</h1>
+        
+        <!-- Navigation Links -->
+        <p><a href="{{ url_for('view_screen_share_requests') }}">View Screen Share Requests</a></p>
+        <p><a href="/admin/users">View Registered Users</a></p>
+        <p><a href="/admin/files">View Uploaded Files</a></p>
+        <p><a href="/logout">Logout</a></p>
+
+        <!-- Pending Screen Sharing Requests Section -->
+        <h3>Pending Screen Sharing Requests</h3>
+<table>
+    <tr>
+        <th>Student</th>
+        <th>Request Time</th>
+        <th>Action</th>
+    </tr>
+    {% if requests %}
+        {% for request in requests %}
+        <tr>
+            <td>{{ request[1] }} (Student)</td>
+            <td>{{ request[2] }}</td>
+            <td>
+                <form action="{{ url_for('approve_screen_share', request_id=request[0]) }}" method="POST" style="display:inline;">
+                    <button type="submit">Approve</button>
+                </form>
+                <form action="{{ url_for('deny_screen_share', request_id=request[0]) }}" method="POST" style="display:inline;">
+                    <button type="submit">Deny</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    {% else %}
+        <tr>
+            <td colspan="3">No pending requests.</td>
+        </tr>
+    {% endif %}
+</table>
+
+            <tr>
+                <th>Filename</th>
+                <th>Uploaded By</th>
+            </tr>
+            {% for file in uploaded_files %}
+            <tr>
+                <td>{{ file[1] }}</td>
+                <td>{{ file[2] }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+<script src="https://cdn.socket.io/4.5.1/socket.io.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/simple-peer@9.11.0/simplepeer.min.js"></script>
+<script>
+const socket = io();
+let peerConnection;
+const config = { iceServers: [{ urls: "stun:stun1.l.google.com:19302" }] }; // STUN server
+
+socket.on('offer', async (offer) => {
+    peerConnection = new RTCPeerConnection(config);
+    peerConnection.onicecandidate = event => {
+        if (event.candidate) {
+            socket.emit('candidate', event.candidate); // Send candidate back to student
+        }
+    };
+
+    peerConnection.ontrack = event => {
+        document.getElementById('remoteVideo').srcObject = event.streams[0]; // Show student’s screen
+    };
+
+    // Listen for ICE connection state changes
+    peerConnection.oniceconnectionstatechange = function() {
+        console.log('ICE connection state (teacher):', peerConnection.iceConnectionState);
+        if (peerConnection.iceConnectionState === 'connected') {
+            console.log('Teacher’s connection to student’s screen established!');
+        }
+    };
+
+    await peerConnection.setRemoteDescription(new RTCSessionDescription(offer)); // Set the offer received
+    const answer = await peerConnection.createAnswer(); // Create an answer to send back
+    await peerConnection.setLocalDescription(answer); // Set answer as local description
+    socket.emit('answer', answer); // Send answer back to student
+});
+
+socket.on('candidate', (candidate) => {
+    peerConnection.addIceCandidate(new RTCIceCandidate(candidate)); // Add any ICE candidates received
+});
+
+function closeConnection() {
+            if (peerConnection) {
+                peerConnection.close();
+                peerConnection = null;
+                console.log("Peer connection closed.");
+            }
+        }
+
+        // Example: Attach this to a button for manual disconnection (optional)
+        document.getElementById('disconnectBtn')?.addEventListener('click', closeConnection);
+
+</script>
+</body>
+</html> 
