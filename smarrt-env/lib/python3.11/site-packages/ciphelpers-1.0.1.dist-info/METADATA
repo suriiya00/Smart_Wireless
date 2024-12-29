@@ -1,0 +1,16 @@
+Metadata-Version: 2.1
+Name: ciphelpers
+Version: 1.0.1
+Summary: TCIP logging class.
+Home-page: UNKNOWN
+Author: Gustavo Alves
+Author-email: gustavo.oliveira@tvlgobo.com.br
+License: MIT
+Platform: UNKNOWN
+Requires-Dist: PyHamcrest
+Requires-Dist: jsonschema
+Requires-Dist: flask
+
+UNKNOWN
+
+
