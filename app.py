@@ -150,7 +150,7 @@ def upload_file():
         return redirect(url_for('dashboard'))
     
     file = request.files['file']
-     if file.filename == '':
+    if file.filename == '':
         flash('No file selected.')
         return redirect(url_for('dashboard'))
          
