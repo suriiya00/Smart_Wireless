@@ -1,7 +1,5 @@
 import os
-import ssl
 import eventlet
-import eventlet.green.ssl as ssl
 from eventlet import wsgi
 from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_login import LoginManager, UserMixin, login_user, login_required, current_user, logout_user
@@ -355,26 +353,7 @@ def handle_start_screen_share(data):
     socketio.emit('open_view_screen', {'message': 'Screen sharing started!'})
 
 
- 
-# Create an SSL context
-context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-# Load the certificate and key from environment variables
-cert = os.getenv('SSL_CERTIFICATE')
-key = os.getenv('SSL_KEY')
 
-# Ensure the environment variables are loaded
-if cert is None or key is None:
-    raise ValueError("SSL certificate or key not found in environment variables.")
-
-context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-context.load_cert_chain(certfile=cert, keyfile=key)
-
-# Setup eventlet listener
-listener = eventlet.listen(('0.0.0.0', 5000))
-
-# Wrap the listener with SSL
-listener = context.wrap_socket(listener, server_side=True)
-
-# Run the WSGI server with SSL
 if __name__ == '__main__':
-    wsgi.server(listener, app)
+    socketio.run(app, host='0.0.0.0', port=5000)
+
