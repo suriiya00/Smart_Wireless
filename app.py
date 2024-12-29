@@ -12,7 +12,12 @@ import subprocess
 # Initialize Flask app
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'
-app.config['UPLOAD_FOLDER'] = '/home/admin/smart/uploads'  # Directory to store uploaded files
+UPLOAD_FOLDER = '/home/admin/smart/uploads'
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER  # Directory to store uploaded files
+
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
+    
 socketio = SocketIO(app)
 
 # SQLite Database Setup
@@ -139,17 +144,33 @@ def dashboard():
 def upload_file():
     if current_user.role != 'student':
         return 'Only students can upload files.'
+
+    if 'file' not in request.files:
+        flash('No file part in the request.')
+        return redirect(url_for('dashboard'))
     
     file = request.files['file']
+     if file.filename == '':
+        flash('No file selected.')
+        return redirect(url_for('dashboard'))
+         
     filename = file.filename
     file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    file.save(file_path)
+    try:
+        file.save(file_path)
 
-    conn = sqlite3.connect('projector.db')
-    c = conn.cursor()
-    c.execute("INSERT INTO uploaded_files (filename, uploaded_by) VALUES (?, ?)", (filename, current_user.username))
-    conn.commit()
-    conn.close()
+        conn = sqlite3.connect('projector.db')
+        c = conn.cursor()
+        c.execute("INSERT INTO uploaded_files (filename, uploaded_by) VALUES (?, ?)", (filename, current_user.username))
+        conn.commit()
+        conn.close()
+
+        flash('File uploaded successfully!')
+    except Exception as e:
+        flash(f'File upload failed: {str(e)}')
+
+    return redirect(url_for('dashboard'))
+
 
     return 'File uploaded successfully!'
 
