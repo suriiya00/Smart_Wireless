@@ -366,6 +366,7 @@ key = os.getenv('SSL_KEY')
 if cert is None or key is None:
     raise ValueError("SSL certificate or key not found in environment variables.")
 
+context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
 context.load_cert_chain(certfile=cert, keyfile=key)
 
 # Setup eventlet listener
