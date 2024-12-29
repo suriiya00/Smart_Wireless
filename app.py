@@ -16,7 +16,7 @@ UPLOAD_FOLDER = '/home/admin/smart/uploads'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER  # Directory to store uploaded files
 
 if not os.path.exists(UPLOAD_FOLDER):
-    .makedirs(UPLOAD_FOLDER)
+    os.makedirs(UPLOAD_FOLDER)
     
 socketio = SocketIO(app)
 
