@@ -358,7 +358,15 @@ def handle_start_screen_share(data):
  
 # Create an SSL context
 context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-context.load_cert_chain(certfile='/home/admin/smart/cert.pem', keyfile='/home/admin/smart/key.pem')
+# Load the certificate and key from environment variables
+cert = os.getenv('SSL_CERTIFICATE')
+key = os.getenv('SSL_KEY')
+
+# Ensure the environment variables are loaded
+if cert is None or key is None:
+    raise ValueError("SSL certificate or key not found in environment variables.")
+
+context.load_cert_chain(certfile=cert, keyfile=key)
 
 # Setup eventlet listener
 listener = eventlet.listen(('0.0.0.0', 5000))
