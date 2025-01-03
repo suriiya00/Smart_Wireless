@@ -24,8 +24,8 @@ socketio = SocketIO(app)
 
 # Google OAuth Setup
 google_bp = make_google_blueprint(
-    client_id=os.getenv('555578886277-toahl49uqg96kd0mo4tmfmmsng60rod3.apps.googleusercontent.com'),
-    client_secret=os.getenv('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'),
+    client_id='555578886277-toahl49uqg96kd0mo4tmfmmsng60rod3.apps.googleusercontent.com',
+    client_secret='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',
     redirect_to='google_login/google'  # This should match the route for the callback
 )
 app.register_blueprint(google_bp, url_prefix='/google_login')
