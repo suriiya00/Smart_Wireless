@@ -1,11 +1,12 @@
 import os
 import eventlet
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, session
 from flask_login import LoginManager, UserMixin, login_user, login_required, current_user, logout_user
 from flask_socketio import SocketIO, emit
 import sqlite3
 import hashlib
 from flask_dance.contrib.google import make_google_blueprint, google
+from flask import current_app as app
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -128,6 +129,16 @@ def google_login():
     if not google.authorized:
         flash('Google login failed!')
         return redirect(url_for('index'))
+    
+    # Log the state and session for debugging
+    app.logger.debug(f"State in session: {session.get('google_oauth_state')}")
+    app.logger.debug(f"State in request: {request.args.get('state')}")
+    
+    # Ensure the state matches
+    if session.get('google_oauth_state') != request.args.get('state'):
+        app.logger.error(f"CSRF Warning! State not equal in request and response.")
+        return "CSRF token mismatch. Please try again.", 400
+
     resp = google.get('/oauth2/v2/userinfo')
     assert resp.ok, resp.text
     user_info = resp.json()
