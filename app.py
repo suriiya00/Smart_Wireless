@@ -15,9 +15,11 @@ app.config['UPLOAD_FOLDER'] = 'Smart_Wireless/uploads'  # Directory to store upl
 socketio = SocketIO(app)
 
 # Google OAuth Setup
-google_bp = make_google_blueprint(client_id='555578886277-toahl49uqg96kd0mo4tmfmmsng60rod3.apps.googleusercontent.com',
-                                  client_secret='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',
-                                  redirect_to='google_login')
+google_bp = make_google_blueprint(
+    client_id='555578886277-toahl49uqg96kd0mo4tmfmmsng60rod3.apps.googleusercontent.com',
+    client_secret='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',
+    redirect_to='google_login'  # This should match the route for the callback
+)
 app.register_blueprint(google_bp, url_prefix='/google_login')
 
 # SQLite Database Setup
@@ -130,7 +132,7 @@ def login():
     return redirect(url_for('index'))
 
 # Google OAuth login callback
-@app.route('/google_login')
+@app.route('/google_login/google/authorized')
 def google_login():
     if not google.authorized:
         flash('Google login failed!')
