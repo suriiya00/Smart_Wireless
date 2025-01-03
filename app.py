@@ -22,8 +22,8 @@ socketio = SocketIO(app)
 google_bp = make_google_blueprint(
     client_id='555578886277-toahl49uqg96kd0mo4tmfmmsng60rod3.apps.googleusercontent.com',
     client_secret='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',
-    scope=["https://www.googleapis.com/auth/userinfo.profile", "https://www.googleapis.com/auth/userinfo.email"],
-    redirect_to="google_login"
+    scope=['https://www.googleapis.com/auth/userinfo.email','https://www.googleapis.com/auth/userinfo.profile','openid'],
+    redirect_to="google_login/google"
 )
 app.register_blueprint(google_bp, url_prefix="/google_login")
 
