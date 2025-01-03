@@ -19,9 +19,6 @@ app.secret_key = 'your_secret_key'
 UPLOAD_FOLDER = '/home/admin/smart/uploads'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
-
 socketio = SocketIO(app)
 
 # SQLite Database Setup
@@ -37,7 +34,8 @@ def create_db():
     c.execute('''CREATE TABLE IF NOT EXISTS uploaded_files (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         filename TEXT NOT NULL,
-        uploaded_by TEXT NOT NULL
+        uploaded_by TEXT NOT NULL,
+        drive_file_id TEXT NOT NULL
     )''')
     c.execute('''CREATE TABLE IF NOT EXISTS screen_share_requests (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -154,6 +152,26 @@ def authenticate_google_drive():
         flash("Failed to authenticate Google Drive. Please check your credentials.")
     return creds
 
+# Function to upload file to Google Drive
+def upload_to_google_drive(file):
+    creds = authenticate_google_drive()
+
+    if creds:
+        try:
+            drive_service = build('drive', 'v3', credentials=creds)
+            file_metadata = {'name': file.filename}
+            media = MediaFileUpload(file, mimetype='application/octet-stream')
+
+            # Upload the file
+            file_drive = drive_service.files().create(
+                body=file_metadata, media_body=media, fields='id').execute()
+
+            return file_drive['id']
+        except Exception as e:
+            flash(f'Failed to upload file to Google Drive: {str(e)}')
+            return None
+    return None
+
 @app.route('/upload', methods=['POST'])
 @login_required
 def upload_file():
@@ -168,19 +186,21 @@ def upload_file():
     if file.filename == '':
         flash('No file selected.')
         return redirect(url_for('dashboard'))
-         
-    filename = file.filename
-    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+
     try:
-        file.save(file_path)
+        file_drive_id = upload_to_google_drive(file)
 
-        conn = sqlite3.connect('projector.db')
-        c = conn.cursor()
-        c.execute("INSERT INTO uploaded_files (filename, uploaded_by) VALUES (?, ?)", (filename, current_user.username))
-        conn.commit()
-        conn.close()
+        if file_drive_id:
+            conn = sqlite3.connect('projector.db')
+            c = conn.cursor()
+            c.execute("INSERT INTO uploaded_files (filename, uploaded_by, drive_file_id) VALUES (?, ?, ?)",
+                      (file.filename, current_user.username, file_drive_id))
+            conn.commit()
+            conn.close()
 
-        flash('File uploaded successfully!')
+            flash('File uploaded successfully to Google Drive!')
+        else:
+            flash('Failed to upload the file to Google Drive.')
     except Exception as e:
         flash(f'File upload failed: {str(e)}')
 
