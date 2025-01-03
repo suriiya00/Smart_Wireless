@@ -1,16 +1,10 @@
 import os
-import io
 import eventlet
-import sqlite3
-import hashlib
 from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_login import LoginManager, UserMixin, login_user, login_required, current_user, logout_user
 from flask_socketio import SocketIO, emit
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
-from google.auth.transport.requests import Request
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
+import sqlite3
+import hashlib
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -69,47 +63,74 @@ def load_user(user_id):
         return User(user_data[0], user_data[1], user_data[3])
     return None
 
-# Google Drive API Setup
-SCOPES = ['https://www.googleapis.com/auth/drive.file']
+# Route for login page
+@app.route('/')
+def index():
+    return render_template('index.html')
 
-def create_drive_service():
-    creds = None
-    if os.path.exists('token.json'):
-        creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+# Route to handle registration
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        role = request.form['role']
+
+        # Check if username already exists
+        conn = sqlite3.connect('projector.db')
+        c = conn.cursor()
+        c.execute("SELECT * FROM users WHERE username=?", (username,))
+        user_data = c.fetchone()
+
+        if user_data:
+            flash('Username already exists! Please choose a different one.')
+            return redirect(url_for('register'))
+
+        # Hash the password before storing it
+        hashed_password = hashlib.sha256(password.encode()).hexdigest()
+
+        # Insert new user into the database
+        c.execute("INSERT INTO users (username, password, role) VALUES (?, ?, ?)", (username, hashed_password, role))
+        conn.commit()
+        conn.close()
+
+        flash('Account created successfully! You can now log in.')
+        return redirect(url_for('index'))
+
+    return render_template('register.html')
+
+# Login handler
+@app.route('/login', methods=['POST'])
+def login():
+    username = request.form['username']
+    password = request.form['password']
+
+    # Hash the input password and check against the stored hashed password
+    hashed_password = hashlib.sha256(password.encode()).hexdigest()
+
+    conn = sqlite3.connect('projector.db')
+    c = conn.cursor()
+    c.execute("SELECT * FROM users WHERE username=? AND password=?", (username, hashed_password))
+    user_data = c.fetchone()
+    conn.close()
     
-    # If there are no (valid) credentials available, let the user log in.
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                'credentials.json', SCOPES)
-            creds = flow.run_local_server(port=0)
-        # Save the credentials for the next run
-        with open('token.json', 'w') as token:
-            token.write(creds.to_json())
+    if user_data:
+        user = User(user_data[0], user_data[1], user_data[3])
+        login_user(user)
+        return redirect(url_for('dashboard'))
+    flash('Login failed. Please try again.')
+    return redirect(url_for('index'))
 
-    # Build the Drive service
-    service = build('drive', 'v3', credentials=creds)
-    return service
+# Dashboard route (teacher or student)
+@app.route('/dashboard')
+@login_required
+def dashboard():
+    if current_user.role == 'teacher':
+        return render_template('teacher_dashboard.html')
+    else:
+        return render_template('student_dashboard.html')
 
-# Function to upload a file to Google Drive
-def upload_file_to_drive(file_path, file_name, folder_id):
-    service = create_drive_service()
-
-    media = MediaFileUpload(file_path, mimetype='application/octet-stream')
-    file_metadata = {
-        'name': file_name,
-        'parents': [folder_id]
-    }
-
-    file_drive = service.files().create(media_body=media, body=file_metadata).execute()
-    return file_drive
-
-# Folder ID where you want to store the files (Create folder manually or via API)
-GOOGLE_DRIVE_FOLDER_ID = 'wireless'
-
-# Route to handle file upload
+# File upload handler
 @app.route('/upload', methods=['POST'])
 @login_required
 def upload_file():
@@ -118,31 +139,172 @@ def upload_file():
     
     file = request.files['file']
     filename = file.filename
-    file_path = os.path.join('/tmp', filename)  # Save file temporarily
-
-    # Save the file temporarily
+    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     file.save(file_path)
 
-    try:
-        # Upload to Google Drive
-        uploaded_file = upload_file_to_drive(file_path, filename, GOOGLE_DRIVE_FOLDER_ID)
-        
-        # Save the file details in the database
-        conn = sqlite3.connect('projector.db')
-        c = conn.cursor()
-        c.execute("INSERT INTO uploaded_files (filename, uploaded_by) VALUES (?, ?)", (filename, current_user.username))
-        conn.commit()
-        conn.close()
+    conn = sqlite3.connect('projector.db')
+    c = conn.cursor()
+    c.execute("INSERT INTO uploaded_files (filename, uploaded_by) VALUES (?, ?)", (filename, current_user.username))
+    conn.commit()
+    conn.close()
 
-        flash(f'File "{filename}" uploaded successfully to Google Drive!')
+    return 'File uploaded successfully!'
 
-        os.remove(file_path)  # Clean up the temporary file
+# Presentation Control Handlers
+@app.route('/next')
+def next_slide():
+    # Handle next slide
+    return 'Next slide'
 
-    except Exception as e:
-        flash(f'File upload failed: {e}')
-        os.remove(file_path)  # Clean up the temporary file
+@app.route('/prev')
+def prev_slide():
+    # Handle previous slide
+    return 'Previous slide'
 
+@app.route('/pause')
+def pause_presentation():
+    # Handle pause
+    return 'Presentation paused'
+
+@app.route('/resume')
+def resume_presentation():
+    # Handle resume
+    return 'Presentation resumed'
+
+@app.route('/control')
+@login_required
+def control_page():
+    return render_template('control.html')
+
+# Logout route
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('index'))
+
+# Admin Routes for Teachers
+@app.route('/admin/users')
+@login_required
+def view_users():
+    if current_user.role not in ['teacher', 'admin']:
+        return "Access Denied", 403  # Restrict access to teachers/admins only
+    
+    conn = sqlite3.connect('projector.db')
+    c = conn.cursor()
+    c.execute("SELECT id, username, role FROM users")  # Fetch user details
+    users = c.fetchall()
+    conn.close()
+
+    return render_template('view_users.html', users=users)
+
+@app.route('/admin/files')
+@login_required
+def view_files():
+    if current_user.role not in ['teacher', 'admin']:
+        return "Access Denied", 403  # Restrict access to teachers/admins only
+    
+    conn = sqlite3.connect('projector.db')
+    c = conn.cursor()
+    c.execute("SELECT id, filename, uploaded_by FROM uploaded_files")  # Fetch file details
+    files = c.fetchall()
+    conn.close()
+
+    return render_template('view_files.html', files=files)
+
+@app.route('/view_screen_share_requests')
+@login_required
+def view_screen_share_requests():
+    if current_user.role != 'teacher':
+        return "Access Denied", 403  # Only teachers can view requests
+
+    conn = sqlite3.connect('projector.db')
+    c = conn.cursor()
+    # Fetch pending screen-sharing requests
+    c.execute("SELECT r.id, u.username, r.request_time FROM screen_share_requests r JOIN users u ON r.student_id = u.id WHERE r.request_status = 'pending'")
+    requests = c.fetchall()
+    conn.close()
+
+    return render_template('teacher_dashboard.html', requests=requests)
+
+@app.route('/request_screen_share', methods=['POST'])
+@login_required
+def request_screen_share():
+    if current_user.role != 'student':
+        return "Access Denied", 403
+    conn = sqlite3.connect('projector.db')
+    c = conn.cursor()
+
+    # Check if a pending request already exists for this student
+    c.execute("SELECT * FROM screen_share_requests WHERE student_id = ? AND request_status = 'pending'", (current_user.id,))
+    existing_request = c.fetchone()
+
+    if existing_request:
+        flash("You already have a pending screen-sharing request.")
+        return redirect(url_for('dashboard'))
+
+    c.execute("INSERT INTO screen_share_requests (student_id) VALUES (?)", (current_user.id,))
+    conn.commit()
+    conn.close()
+    flash('Screen sharing request sent to teacher.')
     return redirect(url_for('dashboard'))
+
+@app.route('/approve_screen_share/<int:request_id>', methods=['POST'])
+@login_required
+def approve_screen_share(request_id):
+    if current_user.role != 'teacher':
+        return "Access Denied", 403
+
+    conn = sqlite3.connect('projector.db')
+    c = conn.cursor()
+
+    # Approve the request
+    c.execute("UPDATE screen_share_requests SET request_status = 'approved' WHERE id = ?", (request_id,))
+    conn.commit()
+
+    # Notify the student via WebSocket
+    c.execute("SELECT student_id FROM screen_share_requests WHERE id = ?", (request_id,))
+    student_id = c.fetchone()[0]
+    conn.close()
+
+    socketio.emit('screen_share_approved', {'student_id': student_id})
+    flash('Screen sharing session approved.')
+    return redirect(url_for('view_screen_share_requests'))
+
+@app.route('/deny_screen_share/<int:request_id>', methods=['POST'])
+@login_required
+def deny_screen_share(request_id):
+    if current_user.role != 'teacher':
+        return "Access Denied", 403
+
+    conn = sqlite3.connect('projector.db')
+    c = conn.cursor()
+
+    # Deny the request
+    c.execute("UPDATE screen_share_requests SET request_status = 'denied' WHERE id = ?", (request_id,))
+    conn.commit()
+    conn.close()
+
+    flash('Screen sharing request denied.')
+    return redirect(url_for('view_screen_share_requests'))
+
+@app.route('/end_screen_share/<int:request_id>', methods=['POST'])
+@login_required
+def end_screen_share(request_id):
+    if current_user.role != 'teacher':
+        return "Access Denied", 403
+
+    conn = sqlite3.connect('projector.db')
+    c = conn.cursor()
+
+    # Mark the request as completed
+    c.execute("UPDATE screen_share_requests SET request_status = 'completed' WHERE id = ?", (request_id,))
+    conn.commit()
+    conn.close()
+
+    socketio.emit('screen_share_ended', {'request_id': request_id})
+    flash('Screen sharing session ended.')
+    return redirect(url_for('view_screen_share_requests'))
 
 # Start socketio server
 if __name__ == '__main__':
