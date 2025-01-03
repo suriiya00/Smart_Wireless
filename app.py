@@ -5,6 +5,7 @@ from flask_login import LoginManager, UserMixin, login_user, login_required, cur
 from flask_socketio import SocketIO, emit
 import sqlite3
 import hashlib
+from werkzeug.security import generate_password_hash, check_password_hash
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -77,7 +78,8 @@ def register():
         email = request.form['email']
         role = request.form['role']
 
-        hashed_password = hashlib.sha256(password.encode()).hexdigest()
+        # Hash the password
+        hashed_password = generate_password_hash(password)
 
         with sqlite3.connect('projector.db') as conn:
             c = conn.cursor()
@@ -96,14 +98,13 @@ def register():
 def login():
     username = request.form['username']
     password = request.form['password']
-    hashed_password = hashlib.sha256(password.encode()).hexdigest()
 
     with sqlite3.connect('projector.db') as conn:
         c = conn.cursor()
-        c.execute("SELECT * FROM users WHERE username=? AND password=?", (username, hashed_password))
+        c.execute("SELECT * FROM users WHERE username=?", (username,))
         user_data = c.fetchone()
-        if user_data:
-            user = User(user_data[0], user_data[1], user_data[2], user_data[3])
+        if user_data and check_password_hash(user_data[2], password):  # Check hashed password
+            user = User(user_data[0], user_data[1], user_data[3], user_data[4])
             login_user(user)
             return redirect(url_for('dashboard'))
     flash('Login failed. Please try again.')
@@ -143,6 +144,13 @@ def upload_file():
 
     flash('File uploaded successfully!')
     return redirect(url_for('dashboard'))
+
+# Logout route
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('index'))
 
 if __name__ == '__main__':
     socketio.run(app, debug=True)
