@@ -125,10 +125,15 @@ def login():
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    if current_user.role == 'teacher':
-        return render_template('teacher_dashboard.html')
-    else:
-        return render_template('student_dashboard.html')
+    try:
+        if current_user.role == 'teacher':
+            return render_template('teacher_dashboard.html')
+        else:
+            return render_template('student_dashboard.html')
+    except Exception as e:
+        logging.error(f"Error rendering dashboard: {str(e)}")
+        flash('An error occurred while loading the dashboard.')
+        return redirect(url_for('index'))
 
 def authenticate_google_drive():
     creds = None
