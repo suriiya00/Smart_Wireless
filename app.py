@@ -18,7 +18,7 @@ socketio = SocketIO(app)
 google_bp = make_google_blueprint(
     client_id='555578886277-toahl49uqg96kd0mo4tmfmmsng60rod3.apps.googleusercontent.com',
     client_secret='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',
-    redirect_to='https://smart-wireless.onrender.com/google_login'  # This should match the route for the callback
+    redirect_to='google_login/google/authorized'  # This should match the route for the callback
 )
 app.register_blueprint(google_bp, url_prefix='/google_login')
 
