@@ -11,7 +11,9 @@ from flask_login import login_user
 # Initialize Flask app
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'
-app.config['UPLOAD_FOLDER'] = 'Smart_Wireless/uploads'  # Directory to store uploaded files
+UPLOAD_FOLDER = '/tmp/uploads/'
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+app.config['UPLOAD_FOLDER'] = 'UPLOAD_FOLDER'  # Directory to store uploaded files
 socketio = SocketIO(app)
 
 # Google OAuth Setup
