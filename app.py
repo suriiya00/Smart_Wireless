@@ -1,14 +1,10 @@
 import os
 import eventlet
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_login import LoginManager, UserMixin, login_user, login_required, current_user, logout_user
 from flask_socketio import SocketIO, emit
 import sqlite3
 import hashlib
-import json
-from google.oauth2 import id_token
-from google.auth.transport.requests import Request
-from google_auth_oauthlib.flow import Flow
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -24,7 +20,6 @@ def create_db():
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT NOT NULL,
         password TEXT NOT NULL,
-        email TEXT NOT NULL,
         role TEXT NOT NULL
     )''')
     c.execute('''CREATE TABLE IF NOT EXISTS uploaded_files (
@@ -46,10 +41,9 @@ create_db()
 
 # User class for login
 class User(UserMixin):
-    def __init__(self, id, username, email, role):
+    def __init__(self, id, username, role):
         self.id = id
         self.username = username
-        self.email = email
         self.role = role
 
 # Initialize login manager
@@ -66,7 +60,7 @@ def load_user(user_id):
     conn.close()
     
     if user_data:
-        return User(user_data[0], user_data[1], user_data[2], user_data[3])
+        return User(user_data[0], user_data[1], user_data[3])
     return None
 
 # Route for login page
@@ -74,41 +68,12 @@ def load_user(user_id):
 def index():
     return render_template('index.html')
 
-# Route for Google OAuth login
-@app.route('/google_login', methods=['POST'])
-def google_login():
-    user_data = request.get_json()
-
-    # Check if the user already exists in the database (using email or Google ID)
-    conn = sqlite3.connect('projector.db')
-    c = conn.cursor()
-    c.execute("SELECT * FROM users WHERE email=?", (user_data['email'],))
-    existing_user = c.fetchone()
-
-    if existing_user:
-        # User exists, log them in
-        user = User(existing_user[0], existing_user[1], existing_user[2], existing_user[3])
-        login_user(user)
-    else:
-        # New user, register them
-        role = request.form.get('role')  # Role must be set when they create the account
-        c.execute("INSERT INTO users (username, email, role) VALUES (?, ?, ?)", 
-                  (user_data['name'], user_data['email'], role))
-        conn.commit()
-        conn.close()
-
-        user = User(existing_user[0], user_data['name'], user_data['email'], role)
-        login_user(user)
-
-    return jsonify({"success": True})
-
 # Route to handle registration
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-        email = request.form['email']
         role = request.form['role']
 
         # Check if username already exists
@@ -125,8 +90,7 @@ def register():
         hashed_password = hashlib.sha256(password.encode()).hexdigest()
 
         # Insert new user into the database
-        c.execute("INSERT INTO users (username, password, email, role) VALUES (?, ?, ?, ?)", 
-                  (username, hashed_password, email, role))
+        c.execute("INSERT INTO users (username, password, role) VALUES (?, ?, ?)", (username, hashed_password, role))
         conn.commit()
         conn.close()
 
@@ -151,7 +115,7 @@ def login():
     conn.close()
     
     if user_data:
-        user = User(user_data[0], user_data[1], user_data[2], user_data[3])
+        user = User(user_data[0], user_data[1], user_data[3])
         login_user(user)
         return redirect(url_for('dashboard'))
     flash('Login failed. Please try again.')
@@ -304,8 +268,44 @@ def approve_screen_share(request_id):
     conn.close()
 
     socketio.emit('screen_share_approved', {'student_id': student_id})
-
+    flash('Screen sharing session approved.')
     return redirect(url_for('view_screen_share_requests'))
 
+@app.route('/deny_screen_share/<int:request_id>', methods=['POST'])
+@login_required
+def deny_screen_share(request_id):
+    if current_user.role != 'teacher':
+        return "Access Denied", 403
+
+    conn = sqlite3.connect('projector.db')
+    c = conn.cursor()
+
+    # Deny the request
+    c.execute("UPDATE screen_share_requests SET request_status = 'denied' WHERE id = ?", (request_id,))
+    conn.commit()
+    conn.close()
+
+    flash('Screen sharing request denied.')
+    return redirect(url_for('view_screen_share_requests'))
+
+@app.route('/end_screen_share/<int:request_id>', methods=['POST'])
+@login_required
+def end_screen_share(request_id):
+    if current_user.role != 'teacher':
+        return "Access Denied", 403
+
+    conn = sqlite3.connect('projector.db')
+    c = conn.cursor()
+
+    # Mark the request as completed
+    c.execute("UPDATE screen_share_requests SET request_status = 'completed' WHERE id = ?", (request_id,))
+    conn.commit()
+    conn.close()
+
+    socketio.emit('screen_share_ended', {'request_id': request_id})
+    flash('Screen sharing session ended.')
+    return redirect(url_for('view_screen_share_requests'))
+
+# Start socketio server
 if __name__ == '__main__':
-    socketio.run(app, debug=True)
+    socketio.run(app)
