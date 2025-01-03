@@ -5,18 +5,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Create New Account</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-
 </head>
 <body>
     <h1>Create New Account</h1>
     <form action="/register" method="POST">
-        Username: <input type="text" name="username" required><br>
-        Password: <input type="password" name="password" required><br>
-        Role: 
-        <select name="role">
+        <!-- Username Field -->
+        <label for="username">Username:</label>
+        <input type="text" id="username" name="username" required><br>
+
+        <!-- Password Field -->
+        <label for="password">Password:</label>
+        <input type="password" id="password" name="password" required><br>
+
+        <!-- Role Selection -->
+        <label for="role">Role:</label>
+        <select name="role" id="role" required>
             <option value="student">Student</option>
             <option value="teacher">Teacher</option>
         </select><br>
+
         <button type="submit">Create Account</button>
     </form>
     <br>
