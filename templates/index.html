@@ -1,4 +1,4 @@
-<!DOCTYPE html> 
+index.html<!DOCTYPE html> 
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -8,8 +8,6 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <!-- Google Fonts for Poppins -->
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
-    <!-- Include Google OAuth Script -->
-    <script src="https://apis.google.com/js/platform.js" async defer></script>
 </head>
 <body>
     <div class="title">
@@ -18,51 +16,27 @@
     </div>
     <div class="container">
         <h2>Login</h2>
-        
-        <!-- Google login button -->
-        <div class="g-signin2" data-onsuccess="onSignIn"></div>
-
-        <!-- Traditional login form (fallback or for users who prefer this) -->
-        <form action="/login" method="POST" autocomplete="on" id="login-form" style="display:none;">
+        <!-- Added autocomplete="on" to the form -->
+        <form action="/login" method="POST" autocomplete="on">
             <label for="username">Username:</label>
+            <!-- Added autocomplete="username" to username input -->
             <input type="text" id="username" name="username" autocomplete="username" required>
             
             <label for="password">Password:</label>
+            <!-- Added autocomplete="current-password" to password input -->
             <input type="password" id="password" name="password" autocomplete="current-password" required>
-            
+            <a href="{{ url_for('google.login') }}">
+            <button>Login with Google</button>
+            </a>
             <button type="submit">Login</button>
         </form>
-
         <p><a href="/register">Create a new account</a></p>
+        <p><a href="{{ url_for('google.login') }}">
+                <button>Login with Google</button>
+        </a></p>
     </div>
     <div class="footer">
         <p>© 2024 Smart Projector. All Rights Reserved.</p>
     </div>
-
-    <script>
-        function onSignIn(googleUser) {
-            var profile = googleUser.getBasicProfile();
-            var userData = {
-                id: profile.getId(),
-                name: profile.getName(),
-                email: profile.getEmail(),
-            };
-
-            // Send the user data to your backend for account creation/login
-            fetch('/google_login', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(userData)
-            }).then(response => {
-                if (response.ok) {
-                    window.location.href = '/dashboard';  // Redirect to dashboard
-                } else {
-                    alert('Login failed');
-                }
-            });
-        }
-    </script>
 </body>
 </html>
