@@ -18,7 +18,7 @@ socketio = SocketIO(app)
 google_bp = make_google_blueprint(
     client_id='555578886277-toahl49uqg96kd0mo4tmfmmsng60rod3.apps.googleusercontent.com',
     client_secret='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',
-    redirect_to='google_login.google/authorized'  # Corrected to include blueprint prefix
+    redirect_to='google_login'  # Corrected to include blueprint prefix
 )
 app.register_blueprint(google_bp, url_prefix='/google_login')
 
