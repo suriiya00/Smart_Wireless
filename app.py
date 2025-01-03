@@ -5,12 +5,20 @@ from flask_login import LoginManager, UserMixin, login_user, login_required, cur
 from flask_socketio import SocketIO, emit
 import sqlite3
 import hashlib
+from flask_dance.contrib.google import make_google_blueprint, google
+from flask_login import login_user
 
 # Initialize Flask app
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'
 app.config['UPLOAD_FOLDER'] = 'Smart_Wireless/uploads'  # Directory to store uploaded files
 socketio = SocketIO(app)
+
+# Google OAuth Setup
+google_bp = make_google_blueprint(client_id='YOUR_GOOGLE_CLIENT_ID',
+                                  client_secret='YOUR_GOOGLE_CLIENT_SECRET',
+                                  redirect_to='google_login')
+app.register_blueprint(google_bp, url_prefix='/google_login')
 
 # SQLite Database Setup
 def create_db():
@@ -120,6 +128,40 @@ def login():
         return redirect(url_for('dashboard'))
     flash('Login failed. Please try again.')
     return redirect(url_for('index'))
+
+# Google OAuth login callback
+@app.route('/google_login')
+def google_login():
+    if not google.authorized:
+        flash('Google login failed!')
+        return redirect(url_for('index'))
+    
+    # Fetch user info from Google
+    resp = google.get('/plus/v1/people/me')
+    assert resp.ok, resp.text
+    user_info = resp.json()
+
+    username = user_info['displayName']
+    email = user_info['emails'][0]['value']
+    
+    # Check if the user exists in the database or register new user
+    conn = sqlite3.connect('projector.db')
+    c = conn.cursor()
+    c.execute("SELECT * FROM users WHERE username=?", (username,))
+    user_data = c.fetchone()
+
+    if user_data is None:
+        # Register the new user (You may want to adjust this based on your logic)
+        c.execute("INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
+                  (username, 'google_oauth_password', 'student'))
+        conn.commit()
+        conn.close()
+    
+    # Log in the user
+    user = User(user_data[0], username, 'student')
+    login_user(user)
+    
+    return redirect(url_for('dashboard'))
 
 # Dashboard route (teacher or student)
 @app.route('/dashboard')
