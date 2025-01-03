@@ -1,4 +1,5 @@
 import os
+import logging
 import eventlet
 import pickle
 from eventlet import wsgi
@@ -18,6 +19,9 @@ app = Flask(__name__)
 app.secret_key = 'your_secret_key'
 UPLOAD_FOLDER = '/home/admin/smart/uploads'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+# Enable logging for debugging
+logging.basicConfig(level=logging.DEBUG)
 
 socketio = SocketIO(app)
 
@@ -67,7 +71,7 @@ def load_user(user_id):
     c.execute("SELECT * FROM users WHERE id=?", (user_id,))
     user_data = c.fetchone()
     conn.close()
-    
+
     if user_data:
         return User(user_data[0], user_data[1], user_data[3])
     return None
@@ -106,6 +110,7 @@ def register():
 def login():
     username = request.form['username']
     password = request.form['password']
+    logging.debug(f"Attempting login for user: {username}")
 
     hashed_password = hashlib.sha256(password.encode()).hexdigest()
 
@@ -114,18 +119,23 @@ def login():
     c.execute("SELECT * FROM users WHERE username=? AND password=?", (username, hashed_password))
     user_data = c.fetchone()
     conn.close()
-    
+
     if user_data:
+        logging.debug(f"User found: {user_data}")
         user = User(user_data[0], user_data[1], user_data[3])
         login_user(user)
+        logging.debug(f"User {username} logged in successfully.")
         return redirect(url_for('dashboard'))
-    flash('Login failed. Please try again.')
-    return redirect(url_for('index'))
+    else:
+        logging.warning(f"Login failed for user: {username}")
+        flash('Login failed. Please try again.')
+        return redirect(url_for('index'))
 
 @app.route('/dashboard')
 @login_required
 def dashboard():
     try:
+        logging.debug(f"Rendering dashboard for user: {current_user.username}, Role: {current_user.role}")
         if current_user.role == 'teacher':
             return render_template('teacher_dashboard.html')
         else:
@@ -153,7 +163,7 @@ def authenticate_google_drive():
             with open('token.json', 'wb') as token:
                 pickle.dump(creds, token)
     except Exception as e:
-        print(f"Error authenticating Google Drive: {e}")
+        logging.error(f"Error authenticating Google Drive: {e}")
         flash("Failed to authenticate Google Drive. Please check your credentials.")
     return creds
 
@@ -173,6 +183,7 @@ def upload_to_google_drive(file):
 
             return file_drive['id']
         except Exception as e:
+            logging.error(f"Failed to upload file to Google Drive: {str(e)}")
             flash(f'Failed to upload file to Google Drive: {str(e)}')
             return None
     return None
@@ -207,6 +218,7 @@ def upload_file():
         else:
             flash('Failed to upload the file to Google Drive.')
     except Exception as e:
+        logging.error(f'File upload failed: {str(e)}')
         flash(f'File upload failed: {str(e)}')
 
     return redirect(url_for('dashboard'))
@@ -234,6 +246,7 @@ def approve_screen_share(request_id):
         else:
             flash('No student found for this request.')
     except Exception as e:
+        logging.error(f"Error approving screen sharing: {e}")
         flash(f"Error approving screen sharing: {e}")
     finally:
         conn.close()
