@@ -18,7 +18,7 @@ socketio = SocketIO(app)
 google_bp = make_google_blueprint(
     client_id='555578886277-toahl49uqg96kd0mo4tmfmmsng60rod3.apps.googleusercontent.com',
     client_secret='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',
-    redirect_to='google_login'  # Corrected to include blueprint prefix
+    redirect_to='google_login'  # This should match the route for the callback
 )
 app.register_blueprint(google_bp, url_prefix='/google_login')
 
@@ -293,36 +293,63 @@ def request_screen_share():
     flash('Screen sharing request sent to teacher.')
     return redirect(url_for('dashboard'))
 
-@app.route('/approve_screen_share_request/<int:request_id>')
+@app.route('/approve_screen_share/<int:request_id>', methods=['POST'])
 @login_required
-def approve_screen_share_request(request_id):
+def approve_screen_share(request_id):
     if current_user.role != 'teacher':
         return "Access Denied", 403
-    
+
     conn = sqlite3.connect('projector.db')
     c = conn.cursor()
+
+    # Approve the request
     c.execute("UPDATE screen_share_requests SET request_status = 'approved' WHERE id = ?", (request_id,))
     conn.commit()
+
+    # Notify the student via WebSocket
+    c.execute("SELECT student_id FROM screen_share_requests WHERE id = ?", (request_id,))
+    student_id = c.fetchone()[0]
     conn.close()
 
-    flash('Screen sharing request approved.')
+    socketio.emit('screen_share_approved', {'student_id': student_id})
+    flash('Screen sharing session approved.')
     return redirect(url_for('view_screen_share_requests'))
 
-@app.route('/reject_screen_share_request/<int:request_id>')
+@app.route('/deny_screen_share/<int:request_id>', methods=['POST'])
 @login_required
-def reject_screen_share_request(request_id):
+def deny_screen_share(request_id):
     if current_user.role != 'teacher':
         return "Access Denied", 403
 
     conn = sqlite3.connect('projector.db')
     c = conn.cursor()
-    c.execute("UPDATE screen_share_requests SET request_status = 'rejected' WHERE id = ?", (request_id,))
+
+    # Deny the request
+    c.execute("UPDATE screen_share_requests SET request_status = 'denied' WHERE id = ?", (request_id,))
     conn.commit()
     conn.close()
 
-    flash('Screen sharing request rejected.')
+    flash('Screen sharing request denied.')
     return redirect(url_for('view_screen_share_requests'))
 
+@app.route('/end_screen_share/<int:request_id>', methods=['POST'])
+@login_required
+def end_screen_share(request_id):
+    if current_user.role != 'teacher':
+        return "Access Denied", 403
+
+    conn = sqlite3.connect('projector.db')
+    c = conn.cursor()
+
+    # Mark the request as completed
+    c.execute("UPDATE screen_share_requests SET request_status = 'completed' WHERE id = ?", (request_id,))
+    conn.commit()
+    conn.close()
+
+    socketio.emit('screen_share_ended', {'request_id': request_id})
+    flash('Screen sharing session ended.')
+    return redirect(url_for('view_screen_share_requests'))
+
+# Start socketio server
 if __name__ == '__main__':
-    eventlet.monkey_patch()
-    socketio.run(app, host='0.0.0.0', port=5000)
+    socketio.run(app)
