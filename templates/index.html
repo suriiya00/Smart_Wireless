@@ -8,7 +8,6 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <!-- Google Fonts for Poppins -->
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
-    
 </head>
 <body>
     <div class="title">
@@ -17,12 +16,15 @@
     </div>
     <div class="container">
         <h2>Login</h2>
-        <form action="/login" method="POST">
+        <!-- Added autocomplete="on" to the form -->
+        <form action="/login" method="POST" autocomplete="on">
             <label for="username">Username:</label>
-            <input type="text" id="username" name="username" required>
+            <!-- Added autocomplete="username" to username input -->
+            <input type="text" id="username" name="username" autocomplete="username" required>
             
             <label for="password">Password:</label>
-            <input type="password" id="password" name="password" required>
+            <!-- Added autocomplete="current-password" to password input -->
+            <input type="password" id="password" name="password" autocomplete="current-password" required>
             
             <button type="submit">Login</button>
         </form>
